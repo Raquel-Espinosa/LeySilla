@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Tiempos de Actividades</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#f97316',
+                        'background': '#f3f4f6',
+                        'card': '#ffffff',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* background */
+        }
+        /* Estilo para un botón activo (en progreso) */
+        .active-activity {
+            animation: pulse-ring 1.5s infinite;
+            box-shadow: 0 0 10px rgba(79, 70, 229, 0.7); /* primary */
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto bg-card p-6 md:p-10 rounded-xl shadow-2xl">
+        <h1 class="text-3xl font-extrabold text-primary mb-2 text-center">Control de Tiempos por Actividad</h1>
+        <p class="text-gray-600 mb-6 text-center">Registra el inicio y fin de cada actividad laboral.</p>
+
+        <!-- Sección de Usuario e ID -->
+        <div id="auth-status" class="bg-indigo-50 p-4 rounded-lg mb-6 border-l-4 border-primary">
+            <p class="text-sm font-medium text-gray-700">
+                <span class="font-bold">N° de Empleado:</span> <span id="employee-number-display" class="font-semibold text-primary">PENDIENTE</span>
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+                <span class="font-bold">ID del Dispositivo (UID):</span> <span id="firebase-uid-display">Cargando...</span>
+            </p>
+        </div>
+        
+        <!-- Estado Actual -->
+        <div id="current-status" class="text-center mb-8 p-6 bg-secondary text-white rounded-lg shadow-lg">
+            <p class="text-lg font-semibold">Actividad en Curso:</p>
+            <p id="current-activity-display" class="text-4xl font-bold mt-2">Ninguna</p>
+            <p id="start-time-display" class="text-sm mt-2 font-light"></p>
+        </div>
+
+        <!-- Botones de Actividades -->
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Selecciona la Actividad</h2>
+        <!-- NOTA: El puntero de eventos (interacción) se deshabilitará hasta que se capture el ID -->
+        <div id="activity-buttons" class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <!-- Los botones se generarán con JS -->
+        </div>
+
+        <!-- Historial / Mensajes -->
+        <div class="mt-10">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Registro y Mensajes</h2>
+            <div id="message-box" class="min-h-[100px] bg-gray-100 p-4 rounded-lg overflow-y-auto text-sm">
+                <!-- Los mensajes se mostrarán aquí -->
+            </div>
+        </div>
+
+        <!-- Modal de Confirmación (reemplaza alert/confirm) -->
+        <div id="confirmation-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div class="bg-card rounded-lg p-6 w-full max-w-sm shadow-xl">
+                <h3 class="text-lg font-bold text-gray-900 mb-4">Confirmar Detención</h3>
+                <p id="modal-message" class="text-gray-700 mb-6"></p>
+                <div class="flex justify-end space-x-3">
+                    <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition duration-150">Cancelar</button>
+                    <button id="modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-150">Detener y Registrar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <!-- Modal de Captura de ID de Empleado -->
+    <div id="employee-id-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4 z-50">
+        <div class="bg-card rounded-xl p-8 w-full max-w-sm shadow-2xl">
+            <h3 class="text-xl font-bold text-primary mb-4">Ingresa tu Número de Empleado</h3>
+            <p class="text-gray-600 mb-4">Por favor, introduce tu número de empleado de 5 dígitos para iniciar.</p>
+            <input type="number" id="employee-id-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary transition" placeholder="Ej: 12345" min="10000" max="99999" pattern="\d{5}">
+            <p id="employee-id-error" class="text-sm text-red-500 mt-2 hidden">El número debe ser un valor numérico exacto de 5 dígitos.</p>
+            <button id="employee-id-submit" class="mt-6 w-full px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">Confirmar</button>
+        </div>
+    </div>
+
+
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =========================================================================
+        // Configuración de Firebase y Variables Globales (SOLUCIÓN AL ERROR)
+        // =========================================================================
+        
+        let db, auth;
+        let currentUserId = 'unknown';
+        let firebaseReady = false; 
+        let employeeNumber = null;
+
+        // ** SOLUCIÓN PARA EJECUCIÓN FUERA DE CANVAS **
+        // Usamos valores por defecto si las variables globales no están definidas.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-time-tracker';
+        
+        // La configuración de Firebase para una app genérica. (Solo necesitamos inicializar para usar Firestore)
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "", // No se necesita API Key para la autenticación anónima/pública en Firestore.
+            projectId: "default-project" // Solo un placeholder.
+        };
+
+        // Ya no necesitamos __initial_auth_token, usaremos signInAnonymously directamente.
+        
+        // ** IMPORTANTE: PEGA AQUÍ LA URL DESPLEGADA DE TU GOOGLE APPS SCRIPT **
+        // DEBE TERMINAR EN "/exec"
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUm2fu_ita4CvrHmy7BTofl5xrRz17IeRS85U65omntRRIB8Xq1vBHdveL7MDEFxzNfQ/exec"; 
+        
+        // Actividades permitidas
+        const ACTIVITIES = ["Recibo", "Pickeo", "Armado", "Documentacion", "Embarque", "Actividades Adm", "Comida", "Baño", "Otros"];
+
+        // Variables de estado local
+        let currentActivity = null;
+        let startTime = null;
+
+        // Referencias del DOM
+        const employeeNumberDisplay = document.getElementById('employee-number-display');
+        const firebaseUidDisplay = document.getElementById('firebase-uid-display');
+        const currentActivityDisplay = document.getElementById('current-activity-display');
+        const startTimeDisplay = document.getElementById('start-time-display');
+        const activityButtonsContainer = document.getElementById('activity-buttons');
+        const messageBox = document.getElementById('message-box');
+        const modal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        
+        // Modal de ID de Empleado
+        const employeeIdModal = document.getElementById('employee-id-modal');
+        const idInput = document.getElementById('employee-id-input');
+        const idSubmitBtn = document.getElementById('employee-id-submit');
+        const idError = document.getElementById('employee-id-error');
+
+
+        // =========================================================================
+        // Inicialización y Autenticación
+        // =========================================================================
+
+        /** Inicializa Firebase y autentica al usuario. */
+        async function initializeFirebase() {
+            if (!firebaseConfig.projectId) {
+                // Ahora, en lugar del error, registra una advertencia y continúa.
+                logMessage("ADVERTENCIA: Configuración de Firebase incompleta. Usando credenciales anónimas.", 'warning');
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Usaremos la autenticación anónima que funciona en cualquier entorno.
+                const userCredential = await signInAnonymously(auth);
+                const user = userCredential.user;
+                
+                currentUserId = user.uid;
+                firebaseUidDisplay.textContent = currentUserId;
+                logMessage("Usuario autenticado de forma anónima. ID listo.", 'info');
+                
+                setupAppAfterAuth(); 
+
+            } catch (error) {
+                // Este bloque de error solo se alcanza si falla la inicialización o la autenticación anónima.
+                logMessage(`ERROR CRÍTICO: No se pudo conectar a Firebase. El registro de estado no funcionará. Mensaje: ${error.message}`, 'error');
+                // Si falla Firebase, la aplicación no puede funcionar ya que el estado es crítico.
+                firebaseUidDisplay.textContent = "FALLÓ CONEXIÓN";
+            }
+        }
+
+        /** Maneja el flujo después de la autenticación. */
+        function setupAppAfterAuth() {
+            // 1. Verificar y pedir el número de empleado si no está capturado
+            if (!employeeNumber) {
+                showEmployeeIdModal();
+            } else {
+                // Si ya lo tiene, se activa la aplicación
+                activateApp();
+            }
+        }
+        
+        /** Activa la funcionalidad principal de la aplicación. */
+        function activateApp() {
+            firebaseReady = true;
+            activityButtonsContainer.style.pointerEvents = 'auto'; // Habilita los botones
+            setupActivityListener(); // Inicia la escucha de actividad guardada
+            logMessage("Aplicación lista para registrar tiempos.", 'info');
+        }
+
+
+        // =========================================================================
+        // Manejo de Estado en Firestore
+        // =========================================================================
+        
+        /** Devuelve la referencia al documento de estado del usuario. */
+        function getUserStatusDocRef() {
+            // Ruta: /artifacts/{appId}/users/{userId}/activityState/current
+            // Nota: Para una app anónima, el userId será el UID anónimo generado por Firebase.
+            return doc(db, `artifacts/${appId}/users/${currentUserId}/activityState/current`);
+        }
+
+        /** Configura el listener de tiempo real para el estado de la actividad. */
+        function setupActivityListener() {
+            if (!firebaseReady) return;
+
+            const docRef = getUserStatusDocRef();
+            
+            // onSnapshot escucha los cambios en tiempo real en la base de datos
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    
+                    if (data.activity && data.startTime) {
+                        currentActivity = data.activity;
+                        startTime = data.startTime.toDate(); 
+                    } else {
+                        currentActivity = null;
+                        startTime = null;
+                    }
+
+                    updateUI(currentActivity, startTime);
+                } else {
+                    currentActivity = null;
+                    startTime = null;
+                    updateUI(null, null);
+                }
+            }, (error) => {
+                logMessage(`Error en el listener de Firestore: ${error.message}`, 'error');
+            });
+        }
+        
+        /** Guarda el estado actual de la actividad en Firestore. */
+        async function saveActivityState(activity, time) {
+            if (!firebaseReady) {
+                logMessage("Esperando a que la aplicación esté lista...", 'warning');
+                return;
+            }
+            try {
+                await setDoc(getUserStatusDocRef(), {
+                    activity: activity,
+                    startTime: time,
+                    userId: currentUserId,
+                    employeeNumber: employeeNumber, 
+                    lastUpdate: new Date()
+                });
+                logMessage(`Estado guardado: ${activity} iniciado.`, 'success');
+            } catch (e) {
+                logMessage(`Error al guardar estado en Firestore: ${e.message}`, 'error');
+            }
+        }
+
+        /** Elimina el estado actual de la actividad de Firestore. */
+        async function clearActivityState() {
+            if (!firebaseReady) return;
+            try {
+                // Sobreescribir con un estado vacío/nulo.
+                 await setDoc(getUserStatusDocRef(), {
+                    activity: null,
+                    startTime: null,
+                    userId: currentUserId,
+                    employeeNumber: employeeNumber, 
+                    lastUpdate: new Date()
+                });
+            } catch (e) {
+                logMessage(`Error al limpiar estado en Firestore: ${e.message}`, 'error');
+            }
+        }
+
+
+        // =========================================================================
+        // Lógica de Tiempos y UI
+        // =========================================================================
+        
+        /** Actualiza la interfaz de usuario. */
+        function updateUI(activity, time) {
+            // 1. Actualizar display principal
+            currentActivityDisplay.textContent = activity || "Ninguna";
+            if (activity) {
+                const formattedTime = time.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                startTimeDisplay.textContent = `Iniciado: ${formattedTime}`;
+                // Estilos para el estado "activo"
+                document.getElementById('current-status').className = 'text-center mb-8 p-6 bg-primary text-white rounded-lg shadow-lg active-activity';
+            } else {
+                startTimeDisplay.textContent = '';
+                // Estilos para el estado "inactivo"
+                document.getElementById('current-status').className = 'text-center mb-8 p-6 bg-secondary text-white rounded-lg shadow-lg';
+            }
+
+            // 2. Actualizar estilos de los botones
+            document.querySelectorAll('#activity-buttons button').forEach(button => {
+                button.classList.remove('bg-primary', 'hover:bg-indigo-700', 'active-activity');
+                button.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-800');
+                if (button.dataset.activity === activity) {
+                    button.classList.remove('bg-gray-200', 'hover:bg-gray-300', 'text-gray-800');
+                    button.classList.add('bg-primary', 'hover:bg-indigo-700', 'text-white', 'active-activity');
+                    button.textContent = `Detener ${activity}`;
+                } else {
+                    button.textContent = `Iniciar ${button.dataset.activity}`;
+                }
+            });
+        }
+        
+        /** * Maneja el clic en un botón de actividad. 
+         * @param {string} activity - El nombre de la actividad.
+         */
+        function handleActivityClick(activity) {
+            if (!firebaseReady) {
+                logMessage("ERROR: Primero debes ingresar tu Número de Empleado.", 'error');
+                showEmployeeIdModal(); // Mostrar el modal si no está listo
+                return;
+            }
+
+            if (currentActivity === activity) {
+                // Si la actividad es la misma, la vamos a detener
+                showConfirmationModal(activity);
+            } else if (currentActivity) {
+                // Si ya hay una actividad en curso, primero se debe detener
+                logMessage(`ERROR: Debes detener primero la actividad actual: ${currentActivity}.`, 'error');
+            } else {
+                // Iniciar nueva actividad
+                startActivity(activity);
+            }
+        }
+        
+        /** * Inicia una nueva actividad. 
+         * @param {string} activity - El nombre de la actividad.
+         */
+        function startActivity(activity) {
+            const now = new Date();
+            currentActivity = activity;
+            startTime = now;
+            
+            // Guardar el estado en Firestore
+            saveActivityState(activity, now);
+            
+            logMessage(`INICIO: ${activity} registrado a las ${now.toLocaleTimeString()}.`, 'info');
+        }
+
+        /** Detiene la actividad en curso, calcula el tiempo y envía el registro. */
+        async function stopActivity() {
+            const endTime = new Date();
+            const activity = currentActivity;
+            const start = startTime;
+            
+            // Cálculo y Formato de Tiempos
+            const durationMs = endTime.getTime() - start.getTime();
+            const durationSec = Math.floor(durationMs / 1000);
+            const durationMin = (durationSec / 60).toFixed(2);
+            
+            const logEntry = {
+                timestamp: endTime.toISOString(), // Marca de tiempo del registro
+                employeeNumber: employeeNumber, // CAMPO REQUERIDO
+                userId: currentUserId,
+                activity: activity,
+                startTime: start.toISOString(),
+                endTime: endTime.toISOString(),
+                durationSeconds: durationSec,
+                durationMinutes: durationMin
+            };
+            
+            logMessage(`FINALIZADO: ${activity}. Duración: ${durationMin} minutos. Enviando registro...`, 'info');
+
+            // 1. Enviar datos a Google Sheets a través de Apps Script
+            await sendToGoogleSheet(logEntry);
+
+            // 2. Limpiar el estado local y en Firestore
+            currentActivity = null;
+            startTime = null;
+            clearActivityState();
+            
+            updateUI(null, null);
+        }
+
+        // =========================================================================
+        // Comunicación con Google Apps Script (Backend)
+        // =========================================================================
+
+        /** * Envía el registro de tiempo a la API de Google Apps Script.
+         * @param {Object} data - Los datos del registro.
+         */
+        async function sendToGoogleSheet(data) {
+            if (GAS_WEB_APP_URL === "COLOCA_TU_URL_AQUI_GAS_WEB_APP_URL") {
+                logMessage("ERROR CRÍTICO: Debes reemplazar 'COLOCA_TU_URL_AQUI_GAS_WEB_APP_URL' en el código con la URL REAL de tu despliegue de Apps Script. Los datos NO se están guardando.", 'error');
+                return;
+            }
+
+            try {
+                // Usamos un loop con reintentos (exponential backoff)
+                const maxRetries = 3;
+                let attempt = 0;
+                let response = null;
+
+                while (attempt < maxRetries) {
+                    try {
+                        response = await fetch(GAS_WEB_APP_URL, {
+                            method: 'POST',
+                            mode: 'no-cors', // Necesario para la conexión POST simple con Apps Script
+                            cache: 'no-cache',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data),
+                        });
+
+                        // Como usamos 'no-cors', la respuesta será opaca. Si no hay error en la red, asumimos éxito.
+                        logMessage("Registro enviado a Google Sheets (Apps Script).", 'success');
+                        return; // Salir del loop al tener éxito
+
+                    } catch (error) {
+                        attempt++;
+                        logMessage(`Fallo en el intento ${attempt}. Error de red: ${error.message}`, 'error');
+                        if (attempt < maxRetries) {
+                            const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+                            logMessage(`Reintentando en ${delay / 1000} segundos...`, 'warning');
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+                logMessage("El envío a Google Sheets falló después de múltiples intentos. Revisa tu configuración.", 'error');
+
+            } catch (error) {
+                logMessage(`Error al enviar datos: ${error.message}`, 'error');
+            }
+        }
+
+        // =========================================================================
+        // Utilidades y UI
+        // =========================================================================
+
+        /** Muestra el modal para capturar el ID de empleado. */
+        function showEmployeeIdModal() {
+            employeeIdModal.classList.remove('hidden');
+            
+            // Desactivar el fondo (la interacción con los botones principales)
+            activityButtonsContainer.style.pointerEvents = 'none';
+            
+            idSubmitBtn.onclick = () => {
+                const inputVal = idInput.value.trim();
+                const numberPattern = /^\d{5}$/; // Patrón: exactamente 5 dígitos
+                
+                if (numberPattern.test(inputVal)) {
+                    employeeNumber = inputVal;
+                    employeeNumberDisplay.textContent = employeeNumber;
+                    employeeIdModal.classList.add('hidden');
+                    idError.classList.add('hidden');
+                    
+                    // Activar la aplicación
+                    logMessage(`Número de Empleado (${employeeNumber}) capturado.`, 'success');
+                    activateApp();
+                    
+                } else {
+                    idError.textContent = "El número debe ser un valor numérico exacto de 5 dígitos.";
+                    idError.classList.remove('hidden');
+                }
+            };
+        }
+
+
+        /** Genera los botones de las actividades. */
+        function generateActivityButtons() {
+            ACTIVITIES.forEach(activity => {
+                const button = document.createElement('button');
+                button.dataset.activity = activity;
+                // Ajustamos el diseño para que se vea bien con 9 botones (3x3 en desktop)
+                button.className = "px-4 py-3 font-semibold rounded-xl transition duration-150 shadow-md bg-gray-200 text-gray-800 hover:bg-gray-300";
+                button.textContent = `Iniciar ${activity}`;
+                button.onclick = () => handleActivityClick(activity);
+                activityButtonsContainer.appendChild(button);
+            });
+        }
+
+        /** Muestra un mensaje en el área de log. */
+        function logMessage(message, type = 'info') {
+            const item = document.createElement('p');
+            let color = 'text-gray-800';
+            let prefix = 'LOG:';
+
+            switch (type) {
+                case 'error':
+                    color = 'text-red-600 font-bold';
+                    prefix = 'ERROR:';
+                    break;
+                case 'warning':
+                    color = 'text-secondary font-medium';
+                    prefix = 'ATENCIÓN:';
+                    break;
+                case 'success':
+                    color = 'text-green-600 font-medium';
+                    prefix = 'ÉXITO:';
+                    break;
+                case 'info':
+                default:
+                    color = 'text-gray-700';
+                    prefix = 'INFO:';
+                    break;
+            }
+
+            item.className = `p-1 border-b border-gray-200 ${color}`;
+            item.innerHTML = `<span class="font-mono text-xs text-gray-400 mr-2">${new Date().toLocaleTimeString()}</span> <strong>${prefix}</strong> ${message}`;
+            messageBox.prepend(item); // Mostrar los mensajes más recientes primero
+            // Limitar la cantidad de mensajes
+            while (messageBox.children.length > 50) {
+                messageBox.removeChild(messageBox.lastChild);
+            }
+        }
+
+        /** Muestra el modal de confirmación. */
+        function showConfirmationModal(activity) {
+            modalMessage.textContent = `Estás por detener la actividad "${activity}". El tiempo se registrará y enviará a Google Sheets. ¿Estás seguro?`;
+            modal.classList.remove('hidden');
+
+            // Configurar botones del modal
+            const confirmHandler = () => {
+                modal.classList.add('hidden');
+                stopActivity();
+                modalConfirmBtn.removeEventListener('click', confirmHandler);
+                modalCancelBtn.removeEventListener('click', cancelHandler);
+            };
+
+            const cancelHandler = () => {
+                modal.classList.add('hidden');
+                logMessage(`Detención de ${activity} cancelada.`, 'warning');
+                modalConfirmBtn.removeEventListener('click', confirmHandler);
+                modalCancelBtn.removeEventListener('click', cancelHandler);
+            };
+
+            modalConfirmBtn.addEventListener('click', confirmHandler);
+            modalCancelBtn.addEventListener('click', cancelHandler);
+        }
+
+        // =========================================================================
+        // Ejecución al Cargar
+        // =========================================================================
+
+        window.onload = () => {
+            generateActivityButtons();
+            initializeFirebase();
+            logMessage("Aplicación cargada. Esperando autenticación e ingreso de Número de Empleado...", 'info');
+        };
+        
+    </script>
+</body>
+</html>
