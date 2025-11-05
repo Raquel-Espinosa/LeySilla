@@ -95,9 +95,9 @@
     <div id="employee-id-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center p-4 z-50">
         <div class="bg-card rounded-xl p-8 w-full max-w-sm shadow-2xl">
             <h3 class="text-xl font-bold text-primary mb-4">Ingresa tu Número de Empleado</h3>
-            <p class="text-gray-600 mb-4">Por favor, introduce tu número de empleado de 5 dígitos para iniciar.</p>
-            <input type="number" id="employee-id-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary transition" placeholder="Ej: 12345" min="10000" max="99999" pattern="\d{5}">
-            <p id="employee-id-error" class="text-sm text-red-500 mt-2 hidden">El número debe ser un valor numérico exacto de 5 dígitos.</p>
+            <p class="text-gray-600 mb-4">Por favor, escanea el QR que se te Asigno para iniciar.</p>
+            <input type="number" id="employee-id-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary transition" placeholder="Ej: 12345" min="1000000000000000000000000000000000000" max="9999999999999999999999999999999999999" pattern="\d{5}">
+            <p id="employee-id-error" class="text-sm text-red-500 mt-2 hidden">El número debe ser un valor numérico exacto del QR.</p>
             <button id="employee-id-submit" class="mt-6 w-full px-4 py-3 bg-primary text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">Confirmar</button>
         </div>
     </div>
@@ -564,5 +564,6 @@
     </script>
 </body>
 </html>
+
 
 
