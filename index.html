@@ -459,7 +459,7 @@
             
             idSubmitBtn.onclick = () => {
                 const inputVal = idInput.value.trim();
-                const numberPattern = /^\d{5}$/; // Patrón: exactamente 5 dígitos
+                const numberPattern = /^\d{37}$/; // Patrón: exactamente 37 dígitos
                 
                 if (numberPattern.test(inputVal)) {
                     employeeNumber = inputVal;
@@ -472,7 +472,7 @@
                     activateApp();
                     
                 } else {
-                    idError.textContent = "El número debe ser un valor numérico exacto de 5 dígitos.";
+                    idError.textContent = "El número debe ser un valor numérico exacto de 37 dígitos.";
                     idError.classList.remove('hidden');
                 }
             };
@@ -564,6 +564,7 @@
     </script>
 </body>
 </html>
+
 
 
 
